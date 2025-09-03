@@ -4,6 +4,7 @@ let uploadedPDFs = [];
 const fileInput = document.getElementById("fileInput");
 const uploadArea = document.querySelector(".upload-area");
 const fileCount = document.getElementById("fileCount");
+const uploadedFilesList = document.getElementById("uploadedFilesList");
 const combineBtn = document.getElementById("combineBtn");
 const progressSection = document.getElementById("progressSection");
 const progressFill = document.getElementById("progressFill");
@@ -14,9 +15,11 @@ uploadArea.addEventListener("dragover", (e) => {
     e.preventDefault();
     uploadArea.classList.add("dragover");
 });
+
 uploadArea.addEventListener("dragleave", () => {
     uploadArea.classList.remove("dragover");
 });
+
 uploadArea.addEventListener("drop", (e) => {
     e.preventDefault();
     uploadArea.classList.remove("dragover");
@@ -25,6 +28,7 @@ uploadArea.addEventListener("drop", (e) => {
     );
     handleFiles(files);
 });
+
 fileInput.addEventListener("change", (e) => {
     handleFiles(Array.from(e.target.files));
 });
@@ -43,30 +47,59 @@ async function handleFiles(files) {
             uploadedPDFs.push(pdf);
         }
     }
+    updatePDFList();
+}
+
+function updatePDFList() {
+    uploadedFilesList.innerHTML = "";
+    uploadedPDFs.forEach((pdf) => {
+        const previewEl = document.createElement("div");
+        previewEl.className = "file-preview";
+        previewEl.innerHTML = `
+            <span class="file-name">${pdf.name}</span>
+            <button class="remove-btn" data-id="${pdf.id}">✖</button>
+        `;
+        uploadedFilesList.appendChild(previewEl);
+    });
     fileCount.textContent = `${uploadedPDFs.length} files`;
 }
 
+uploadedFilesList.addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-btn")) {
+        const fileId = parseFloat(e.target.dataset.id);
+        uploadedPDFs = uploadedPDFs.filter(
+            (pdf) => pdf.id !== fileId,
+        );
+        updatePDFList();
+    }
+});
+
 combineBtn.addEventListener("click", async () => {
     if (uploadedPDFs.length < 1) {
-        showStatus("Please upload at least 1 PDF to process", "error");
+        showStatus(
+            "Please upload at least 1 PDF to process",
+            "error",
+        );
         return;
     }
 
     showProgress("Processing and Combining PDFs...", "info");
-
     const { PDFDocument, PageSizes, rgb, StandardFonts } = PDFLib;
     const globalDeleteOption = document.getElementById("globalDeleteOption").value;
     const globalLayoutOption = document.getElementById("globalLayoutOption").value;
 
     try {
         const finalCombinedPdf = await PDFDocument.create();
-        const timesRomanFont = await finalCombinedPdf.embedFont(StandardFonts.TimesRoman);
-        const timesRomanBoldFont = await finalCombinedPdf.embedFont(StandardFonts.TimesRomanBold);
+        const timesRomanBoldFont = await finalCombinedPdf.embedFont(
+            StandardFonts.TimesRomanBold,
+        );
         let combinedPageCount = 0;
 
         for (let i = 0; i < uploadedPDFs.length; i++) {
             const pdf = uploadedPDFs[i];
-            updateProgressBar(((i + 1) / uploadedPDFs.length) * 100);
+            updateProgressBar(
+                ((i + 1) / uploadedPDFs.length) * 100,
+            );
 
             // Step 1: Load the source document
             const sourceDoc = await PDFDocument.load(pdf.data);
@@ -100,7 +133,9 @@ combineBtn.addEventListener("click", async () => {
                     sourceDoc,
                     pagesToKeep,
                 );
-                copiedPages.forEach((page) => tempDoc.addPage(page));
+                copiedPages.forEach((page) =>
+                    tempDoc.addPage(page),
+                );
             } else {
                 // If no pages are to be deleted, use the original source document
                 tempDoc = sourceDoc;
@@ -114,17 +149,19 @@ combineBtn.addEventListener("click", async () => {
                 // '2' pages per sheet
                 const layoutDoc = await PDFDocument.create();
                 const srcPages = tempDoc.getPages();
+
                 for (let p = 0; p < srcPages.length; p += 2) {
                     // Create a landscape page by explicitly using [height, width] from the PageSizes array
                     const newPage = layoutDoc.addPage([
                         PageSizes.A4[1],
                         PageSizes.A4[0],
                     ]);
-
                     const { width: newWidth, height: newHeight } =
                         newPage.getSize();
 
-                    const embeddedPage1 = await layoutDoc.embedPage(srcPages[p]);
+                    const embeddedPage1 = await layoutDoc.embedPage(
+                        srcPages[p],
+                    );
                     newPage.drawPage(embeddedPage1, {
                         x: 5,
                         y: 5,
@@ -143,9 +180,10 @@ combineBtn.addEventListener("click", async () => {
                     });
 
                     if (srcPages[p + 1]) {
-                        const embeddedPage2 = await layoutDoc.embedPage(
-                            srcPages[p + 1],
-                        );
+                        const embeddedPage2 =
+                            await layoutDoc.embedPage(
+                                srcPages[p + 1],
+                            );
                         newPage.drawPage(embeddedPage2, {
                             x: newWidth / 2 + 5,
                             y: 5,
@@ -173,15 +211,19 @@ combineBtn.addEventListener("click", async () => {
                 docToMerge,
                 pageIndices,
             );
-            
+
             for (const page of copiedPages) {
                 finalCombinedPdf.addPage(page);
                 combinedPageCount++;
-                
+
                 const pageNumberText = `${combinedPageCount}`;
                 const fontSize = 12;
-                const textWidth = timesRomanBoldFont.widthOfTextAtSize(pageNumberText, fontSize);
-                const x = (page.getWidth() / 2) - (textWidth / 2);
+                const textWidth =
+                    timesRomanBoldFont.widthOfTextAtSize(
+                        pageNumberText,
+                        fontSize,
+                    );
+                const x = page.getWidth() / 2 - textWidth / 2;
                 const y = 15;
 
                 page.drawText(pageNumberText, {
@@ -210,7 +252,10 @@ combineBtn.addEventListener("click", async () => {
 
         showStatus("PDFs combined successfully!", "success");
     } catch (error) {
-        showStatus("Error combining PDFs: " + error.message, "error");
+        showStatus(
+            "Error combining PDFs: " + error.message,
+            "error",
+        );
     }
 });
 
@@ -235,5 +280,4 @@ function updateProgressBar(percent) {
 }
 
 // --- Initialize ---
-fileCount.textContent = `${uploadedPDFs.length} files`;
-
+updatePDFList();
